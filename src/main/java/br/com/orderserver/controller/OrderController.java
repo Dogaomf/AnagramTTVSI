@@ -24,10 +24,4 @@ public class OrderController {
         return orderService.getOrderById(id);
     }
 
-/*    @GetMapping("/{id}/total")
-    public BigDecimal getOrderTotal(@PathVariable Long id) {
-        return orderService.getOrderById(id)
-                .map(CustomerOrder::calculateTotal)
-                .orElseThrow(() -> new RuntimeException("Pedido não encontrado"));
-    }*/
 }

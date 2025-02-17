@@ -27,18 +27,13 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Pedido duplicado detectado. ID: " + order.getExternalOrderId());
         }
 
-
-        /*for (OrderItem item : order.getItems()) {
-            item.setCustomerOrder(order);
-        }*/
-
         for (OrderItem item : order.getItems()) {
             Product product = productRepository.findById(item.getProduct().getId())
                     .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + item.getProduct().getId()));
 
             item.setProduct(product);
-            item.setPrice(product.getPrice()); // Define o preço do produto no item do pedido
-            item.setCustomerOrder(order); // Garante que o item esteja associado corretamente ao pedido
+            item.setPrice(product.getPrice());
+            item.setCustomerOrder(order);
         }
 
         order.setStatus(OrderStatus.PROCESSING);
@@ -47,7 +42,6 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.COMPLETED);
         return orderRepository.save(order);
     }
-
 
     @Override
     public Optional<CustomerOrder> getOrderById(Long id) {
