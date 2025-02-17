@@ -1,31 +1,33 @@
 package br.com.orderserver.controller;
 
-import br.com.orderserver.model.Pedido;
+import br.com.orderserver.model.CustomerOrder;
 import br.com.orderserver.service.OrderService;
-import org.springframework.http.ResponseEntity;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.Optional;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/orders")
+@RequiredArgsConstructor
 public class OrderController {
-
     private final OrderService orderService;
 
-    public OrderController(OrderService orderService) {
-        this.orderService = orderService;
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public CustomerOrder createOrder(@RequestBody CustomerOrder order) {
+        return orderService.processOrder(order);
     }
 
-    @PostMapping(value = "/pedidos")
-    public ResponseEntity<Pedido> receberPedido(@RequestBody Pedido pedido) {
-        Pedido processado = orderService.processarPedido(pedido);
-        return ResponseEntity.ok(processado);
+    @GetMapping("/{id}")
+    public Optional<CustomerOrder> getOrder(@PathVariable Long id) {
+        return orderService.getOrderById(id);
     }
 
-    @GetMapping
-    public ResponseEntity<List<Pedido>> consultarPedidos(@RequestParam String status) {
-        List<Pedido> pedidos = orderService.consultarPedidos(status);
-        return ResponseEntity.ok(pedidos);
-    }
+/*    @GetMapping("/{id}/total")
+    public BigDecimal getOrderTotal(@PathVariable Long id) {
+        return orderService.getOrderById(id)
+                .map(CustomerOrder::calculateTotal)
+                .orElseThrow(() -> new RuntimeException("Pedido não encontrado"));
+    }*/
 }

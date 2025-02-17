@@ -1,9 +1,8 @@
 package br.com.orderserver.repository;
 
-import br.com.orderserver.model.Produto;
+import br.com.orderserver.model.OrderItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface ProdutoRepository extends JpaRepository<Produto, Long> {
-}
+interface OrderItemRepository extends JpaRepository<OrderItem, Long> {}
