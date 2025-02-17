@@ -1,204 +1,159 @@
-/*
+
 package br.com.orderserver.service;
 
-import br.com.orderserver.exception.PedidoDuplicadoException;
-import br.com.orderserver.model.Pedido;
-import br.com.orderserver.model.Item;
-import br.com.orderserver.repository.PedidoRepository;
-import br.com.orderserver.repository.ItemRepository;
-import org.junit.Assert;
-import org.junit.Before;
+import br.com.orderserver.enums.OrderStatus;
+import br.com.orderserver.model.CustomerOrder;
+import br.com.orderserver.model.OrderItem;
+import br.com.orderserver.model.Product;
+import br.com.orderserver.repository.OrderRepository;
+import br.com.orderserver.repository.ProductRepository;
+import br.com.orderserver.service.impl.OrderServiceImpl;
 import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.cache.CacheManager;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
 
+import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
+@RunWith(SpringRunner.class)
+@SpringBootTest(classes = OrderServiceTest.class)
 public class OrderServiceTest {
 
     @Mock
-    private PedidoRepository pedidoRepository;
+    private OrderRepository orderRepository;
 
     @Mock
-    private ItemRepository itemRepository;
-
-    @Mock
-    private CacheManager cacheManager;
+    private ProductRepository productRepository;
 
     @InjectMocks
-    private OrderService orderService;
+    private OrderServiceImpl orderService;
 
-    private Pedido pedido;
-
-    private Item item;
-
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setUp() {
         MockitoAnnotations.initMocks(this);
-
-        pedido = new Pedido();
-        pedido.setId(1L);
-        pedido.setStatus("PENDENTE");
-
-        // Atualizando os produtos com o campo versao como Integer
-        pedido.setProdutos(Arrays.asList(
-                new Item("Produto 1", BigDecimal.valueOf(10), 2, 1),
-                new Item("Produto 2", BigDecimal.valueOf(20), 1, 2)
-        ));
     }
 
+
     @Test
-    public void testProcessarPedido_QuandoProdutoNaoExistir_DeveLancarExcecao() {
-        when(pedidoRepository.findById(pedido.getId())).thenReturn(Optional.empty());
-        when(pedidoRepository.save(pedido)).thenReturn(pedido);
+    public void deveLancarErroQuandoPedidoDuplicado() {
+        // Arrange
+        CustomerOrder order = new CustomerOrder();
+        order.setExternalOrderId("DUPLICADO");
 
-        Long id = 15L;
-        when(itemRepository.findById(id)).thenReturn(Optional.empty());
+        when(orderRepository.existsByExternalOrderId("DUPLICADO")).thenReturn(true);
 
-        IllegalArgumentException exception = Assert.assertThrows(IllegalArgumentException.class, () -> {
-            orderService.processarPedido(pedido);
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            orderService.processOrder(order);
         });
 
-        Assert.assertEquals("Produto não encontrado no estoque", exception.getMessage());
+        assertEquals("Pedido duplicado detectado. ID: DUPLICADO", exception.getMessage());
     }
 
     @Test
-    public void testProcessarPedido_QuandoPedidoNaoExistir_DeveProcessarComSucesso() {
-        when(pedidoRepository.findById(pedido.getId())).thenReturn(Optional.empty());
-        when(pedidoRepository.save(pedido)).thenReturn(pedido);
+    public void deveLancarErroQuandoProdutoNaoForEncontrado() {
+        CustomerOrder order = new CustomerOrder();
+        order.setExternalOrderId("ABC123");
 
-        Item itemEmEstoque = new Item("Produto 1", BigDecimal.valueOf(10), 10, 1);
-        itemEmEstoque.setId(1L);
+        OrderItem item = new OrderItem();
+        Product product = new Product();
+        product.setId(99L);
+        item.setProduct(product);
+        order.setItems(List.of(item));
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(itemEmEstoque));
+        when(orderRepository.existsByExternalOrderId("ABC123")).thenReturn(false);
+        when(productRepository.findById(99L)).thenReturn(Optional.empty());
 
-        List<Item> items = new ArrayList<>();
-        items.add(itemEmEstoque);
-        pedido.setProdutos(items);
-
-        Pedido resultado = orderService.processarPedido(pedido);
-
-        Assert.assertEquals(1, resultado.getItems().get(0).getVersao().intValue());
-
-        verify(pedidoRepository, times(1)).save(pedido);
-    }
-
-    @Test
-    public void testProcessarPedido_QuandoPedidoExistir_DeveLancarExcecao() {
-        when(pedidoRepository.findById(pedido.getId())).thenReturn(Optional.of(pedido));
-
-        PedidoDuplicadoException exception = Assert.assertThrows(PedidoDuplicadoException.class, () -> {
-            orderService.processarPedido(pedido);
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            orderService.processOrder(order);
         });
 
-        Assert.assertEquals("Pedido com o identificador 1 já existe.", exception.getMessage());
-        verify(pedidoRepository, times(0)).save(pedido);
+        assertEquals("Produto não encontrado: 99", exception.getMessage());
     }
 
     @Test
-    public void testConsultarPedidos() {
-        Pedido pedido1 = new Pedido(1L, Arrays.asList(), BigDecimal.valueOf(100), "PROCESSADO",1);
-        Pedido pedido2 = new Pedido(2L, Arrays.asList(), BigDecimal.valueOf(200), "PROCESSADO",1);
+    public void deveProcessarPedidoComSucesso() {
+        CustomerOrder order = new CustomerOrder();
+        order.setExternalOrderId("ABC123");
 
-        when(pedidoRepository.findByStatus("PROCESSADO")).thenReturn(Arrays.asList(pedido1, pedido2));
+        Product product = new Product();
+        product.setId(1L);
+        product.setPrice(new BigDecimal("100.00"));
 
-        List<Pedido> pedidos = orderService.consultarPedidos("PROCESSADO");
+        OrderItem item = new OrderItem();
+        item.setProduct(product);
+        item.setQuantity(2);
+        order.setItems(List.of(item));
 
-        Assert.assertEquals(2, pedidos.size());
-        Assert.assertTrue(pedidos.contains(pedido1));
-        Assert.assertTrue(pedidos.contains(pedido2));
+        when(orderRepository.existsByExternalOrderId("ABC123")).thenReturn(false);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(orderRepository.save(any(CustomerOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CustomerOrder processedOrder = orderService.processOrder(order);
+
+        assertNotNull(processedOrder);
+        assertEquals(OrderStatus.COMPLETED, processedOrder.getStatus());
+        assertEquals(new BigDecimal("100.00"), processedOrder.getItems().get(0).getPrice());
+        verify(orderRepository, times(2)).save(any(CustomerOrder.class));  // Salvo duas vezes (PROCESSING e COMPLETED)
+    }
+
+
+    @Test
+    public void deveAlterarStatusDoPedido() {
+        CustomerOrder order = new CustomerOrder();
+        order.setExternalOrderId("ABC123");
+
+        Product product = new Product();
+        product.setId(1L);
+        product.setPrice(new BigDecimal("100.00"));
+
+        OrderItem item = new OrderItem();
+        item.setProduct(product);
+        item.setQuantity(2);
+        order.setItems(List.of(item));
+
+        when(orderRepository.existsByExternalOrderId("ABC123")).thenReturn(false);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(orderRepository.save(any(CustomerOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CustomerOrder processedOrder = orderService.processOrder(order);
+
+        assertEquals(OrderStatus.COMPLETED, processedOrder.getStatus());
     }
 
     @Test
-    public void testProcessarPedido_Sucesso() {
-        Pedido pedido = new Pedido();
-        pedido.setId(1L);
-        pedido.setStatus("PENDENTE");
-        pedido.setTotal(BigDecimal.ZERO);
-        pedido.setProdutos(new ArrayList<>());
+    public void deveRetornarPedidoQuandoExistir() {
+        CustomerOrder order = new CustomerOrder();
+        order.setId(1L);
+        order.setExternalOrderId("ABC123");
 
-        when(pedidoRepository.findById(pedido.getId())).thenReturn(Optional.empty());
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
 
-        Item itemEmEstoque = new Item("Produto 1", BigDecimal.valueOf(10), 10, 1);
-        itemEmEstoque.setId(1L);
-        itemEmEstoque.setQuantidade(10);
+        Optional<CustomerOrder> result = orderService.getOrderById(1L);
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(itemEmEstoque));
-
-        Item itemNoPedido = new Item("Produto 1", BigDecimal.valueOf(10), 3, 1);
-        itemNoPedido.setId(1L);
-
-        pedido.getItems().add(itemNoPedido);
-
-        when(pedidoRepository.save(any(Pedido.class))).thenReturn(pedido);
-        Pedido pedidoSalvo = orderService.processarPedido(pedido);
-
-        Assert.assertNotNull(pedidoSalvo);
-        Assert.assertEquals("PROCESSADO", pedidoSalvo.getStatus());
-        Assert.assertTrue(pedidoSalvo.getTotal().compareTo(BigDecimal.ZERO) > 0);
+        assertTrue(result.isPresent());
+        assertEquals(order.getId(), result.get().getId());
     }
 
     @Test
-    public void testProcessarPedido_PedidoDuplicado() {
-        when(pedidoRepository.findById(pedido.getId())).thenReturn(Optional.of(pedido));
+    public void deveRetornarVazioQuandoPedidoNaoExistir() {
+        when(orderRepository.findById(1L)).thenReturn(Optional.empty());
 
-        Assert.assertThrows(PedidoDuplicadoException.class, () -> orderService.processarPedido(pedido));
+        Optional<CustomerOrder> result = orderService.getOrderById(1L);
+
+        assertFalse(result.isPresent());
     }
 
-    @Test
-    public void testBuscarPedidoPorId_PedidoNaoEncontrado() {
-        Long idPedido = 2L;
-        when(pedidoRepository.findById(idPedido)).thenReturn(Optional.empty());
-
-        RuntimeException exception = Assert.assertThrows(RuntimeException.class, () -> {
-            pedidoRepository.findById(idPedido).orElseThrow(() -> new RuntimeException("Pedido não encontrado"));
-        });
-
-        Assert.assertEquals("Pedido não encontrado", exception.getMessage());
-    }
-
-    @Test
-    public void testProcessarPedido_EstoqueInsuficiente() {
-        Item itemEstoque = new Item("Produto 1", BigDecimal.valueOf(10), 3, 1);
-        itemEstoque.setId(1L);
-
-        Item itemPedido = new Item("Produto 1", BigDecimal.valueOf(10), 5, 1);
-        itemPedido.setId(1L);
-
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(itemEstoque));
-
-        pedido.setProdutos(Collections.singletonList(itemPedido));
-
-        IllegalArgumentException exception = Assert.assertThrows(IllegalArgumentException.class, () -> {
-            orderService.processarPedido(pedido);
-        });
-
-        Assert.assertEquals("Estoque insuficiente para o produto Produto 1", exception.getMessage());
-    }
-
-   @Test
-    public void testProcessarPedido_OptimisticLockingFailure() {
-        Item itemEstoque = new Item("Produto 1", BigDecimal.valueOf(10), 10, 1);
-        itemEstoque.setId(1L);
-
-        Item itemPedido = new Item("Produto 1", BigDecimal.valueOf(10), 5, 1);
-        itemPedido.setId(1L);
-
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(itemEstoque));
-        doThrow(OptimisticLockingFailureException.class).when(itemRepository).save(itemEstoque);
-
-        pedido.setProdutos(Collections.singletonList(itemPedido));
-
-        IllegalStateException exception = Assert.assertThrows(IllegalStateException.class, () -> {
-            orderService.processarPedido(pedido);
-        });
-
-        Assert.assertEquals("O estoque foi modificado por outra transação, tente novamente.", exception.getMessage());
-    }
-}*/
+}
