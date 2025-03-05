@@ -1,6 +1,6 @@
-package br.com.orderserver.controller;
+package br.com.anagram.controller;
 
-import br.com.orderserver.service.AnagramService;
+import br.com.anagram.service.AnagramService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;

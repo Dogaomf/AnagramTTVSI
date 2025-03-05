@@ -1,4 +1,4 @@
-package br.com.orderserver.service;
+package br.com.anagram.service;
 
 import org.springframework.stereotype.Service;
 

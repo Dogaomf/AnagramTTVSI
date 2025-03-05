@@ -1,5 +1,5 @@
 
-package br.com.orderserver.service;
+package br.com.anagram.service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
