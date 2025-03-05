@@ -35,3 +35,22 @@ Resultado final:
 ["abc", "acb", "bac", "bca", "cab", "cba"]
 
 Esse método garante que todas as combinações possíveis de uma palavra sejam exploradas de forma organizada e eficiente.
+
+Via Postman fiz a chamada GET abaixo:
+
+http://localhost:8080/anagrams/frw
+
+Me retornou um Json que vou compartilhar:
+
+[
+"frw",
+"fwr",
+"rfw",
+"rwf",
+"wrf",
+"wfr"
+]
+
+Funciona para qualquer grupo de letras e valida se esta vazia ou se contem algum outro caracter que não seja letras, e retorna a mensagem :
+
+"Input must be a non-empty string containing only letters."
